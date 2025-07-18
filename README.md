@@ -1,6 +1,6 @@
 # Go HackerNews Static Site
 
-This project generates a static website that displays the top stories from [HackerNews](https://news.ycombinator.com/) using the official [HackerNews API](https://github.com/HackerNews/API).
+This project generates a static website that displays the top stories from [HackerNews](https://news.ycombinator.com/) using the official [HackerNews API](https://github.com/HackerNews/API). minor tweak
 
 ## How to Use
 
