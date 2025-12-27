@@ -8,6 +8,7 @@ on:
 
 env:
   GO_VERSION: '1.21'
+  MIN_COVERAGE: 60  # Minimum coverage percentage required
 
 jobs:
   # ============================================
@@ -25,6 +26,17 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: go.sum
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-
 
       - name: Download dependencies
         run: go mod download
@@ -57,7 +69,7 @@ jobs:
           retention-days: 7
 
   # ============================================
-  # Unit Tests
+  # Unit Tests with Coverage Threshold
   # ============================================
   test:
     name: Unit Tests
@@ -72,9 +84,55 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: go.sum
 
-      - name: Run tests
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-
+
+      - name: Run tests with coverage
         run: go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Display coverage report
+        run: go tool cover -func=coverage.out
+
+      - name: Check coverage threshold
+        run: |
+          # Extract total coverage percentage
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+
+          echo "Total coverage: ${COVERAGE}%"
+          echo "Minimum required: ${{ env.MIN_COVERAGE }}%"
+
+          # Compare coverage (handle decimal comparison)
+          if [ -z "$COVERAGE" ]; then
+            echo "Could not determine coverage"
+            exit 1
+          fi
+
+          # Use awk for float comparison
+          PASS=$(awk -v cov="$COVERAGE" -v min="${{ env.MIN_COVERAGE }}" 'BEGIN { print (cov >= min) ? "1" : "0" }')
+
+          if [ "$PASS" = "1" ]; then
+            echo "✅ Coverage check passed: ${COVERAGE}% >= ${{ env.MIN_COVERAGE }}%"
+          else
+            echo "❌ Coverage check failed: ${COVERAGE}% < ${{ env.MIN_COVERAGE }}%"
+            echo ""
+            echo "Please add more tests to increase coverage."
+            exit 1
+          fi
+
+      - name: Generate coverage badge data
+        if: github.ref == 'refs/heads/main'
+        run: |
+          COVERAGE=$(go tool cover -func=coverage.out | grep total | awk '{print $3}' | sed 's/%//')
+          echo "COVERAGE=${COVERAGE}" >> $GITHUB_ENV
 
       - name: Upload coverage report
         uses: actions/upload-artifact@v4
@@ -83,8 +141,15 @@ jobs:
           path: coverage.out
           retention-days: 7
 
-      - name: Display coverage
-        run: go tool cover -func=coverage.out
+      - name: Generate HTML coverage report
+        run: go tool cover -html=coverage.out -o coverage.html
+
+      - name: Upload HTML coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-html
+          path: coverage.html
+          retention-days: 7
 
   # ============================================
   # Security Scan
@@ -102,18 +167,51 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: go.sum
 
-      - name: Run govulncheck
+      - name: Cache security tools
+        uses: actions/cache@v4
+        with:
+          path: ~/go/bin
+          key: ${{ runner.os }}-go-security-tools-v1
+          restore-keys: |
+            ${{ runner.os }}-go-security-tools-
+
+      - name: Install security tools
         run: |
           go install golang.org/x/vuln/cmd/govulncheck@latest
-          govulncheck ./...
+          go install github.com/securego/gosec/v2/cmd/gosec@latest
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+      - name: Run gosec
+        run: |
+          gosec -severity medium -confidence medium -exclude-dir=testdata ./... || true
+        continue-on-error: true
 
       - name: Check for hardcoded secrets
         run: |
-          # Simple check for common secret patterns
-          if grep -rE "(password|secret|api_key|apikey)\s*[:=]\s*['\"][^'\"]+['\"]" --include="*.go" . | grep -v "_test.go" | grep -v "example"; then
-            echo "Warning: Potential hardcoded secrets found"
-            # Don't fail, just warn
+          echo "Checking for potential hardcoded secrets..."
+          FOUND=0
+
+          # Check for common secret patterns
+          if grep -rE "(password|secret|api_key|apikey|token)\s*[:=]\s*['\"][^'\"]{8,}['\"]" \
+            --include="*.go" . \
+            --exclude-dir=".git" \
+            --exclude="*_test.go" | grep -v "example" | grep -v "placeholder"; then
+            echo "⚠️  Warning: Potential hardcoded secrets found (review above)"
+            FOUND=1
+          fi
+
+          # Check for AWS keys
+          if grep -rE "AKIA[0-9A-Z]{16}" --include="*.go" .; then
+            echo "❌ AWS Access Key ID found!"
+            FOUND=1
+          fi
+
+          if [ $FOUND -eq 0 ]; then
+            echo "✅ No obvious secrets detected"
           fi
 
   # ============================================
@@ -237,7 +335,7 @@ jobs:
             });
 
   # ============================================
-  # Integration Tests (optional, needs database)
+  # Integration Tests
   # ============================================
   integration:
     name: Integration Tests
@@ -252,6 +350,17 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+          cache-dependency-path: go.sum
+
+      - name: Cache Go build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-build-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-build-
 
       - name: Run integration tests
         run: |
@@ -272,16 +381,16 @@ jobs:
 
           # Check if server is running
           if curl -s -o /dev/null -w "%{http_code}" http://localhost:8080 | grep -q "200\|302"; then
-            echo "Server started successfully"
+            echo "✅ Server started successfully"
           else
-            echo "Server health check passed (may redirect to login)"
+            echo "✅ Server health check passed (may redirect to login)"
           fi
 
           # Stop server
           kill $SERVER_PID 2>/dev/null || true
 
   # ============================================
-  # Summary
+  # CI Summary
   # ============================================
   summary:
     name: CI Summary
@@ -291,15 +400,19 @@ jobs:
     steps:
       - name: Check job results
         run: |
-          echo "## CI Pipeline Summary"
-          echo "- Build: ${{ needs.build.result }}"
-          echo "- Tests: ${{ needs.test.result }}"
-          echo "- Security: ${{ needs.security.result }}"
-          echo "- Integration: ${{ needs.integration.result }}"
+          echo "## 📊 CI Pipeline Summary"
+          echo ""
+          echo "| Job | Status |"
+          echo "|-----|--------|"
+          echo "| Build & Lint | ${{ needs.build.result == 'success' && '✅ Passed' || '❌ Failed' }} |"
+          echo "| Unit Tests | ${{ needs.test.result == 'success' && '✅ Passed' || '❌ Failed' }} |"
+          echo "| Security Scan | ${{ needs.security.result == 'success' && '✅ Passed' || '⚠️ Check logs' }} |"
+          echo "| Integration | ${{ needs.integration.result == 'success' && '✅ Passed' || '❌ Failed' }} |"
+          echo ""
 
           if [ "${{ needs.build.result }}" != "success" ] || [ "${{ needs.test.result }}" != "success" ]; then
-            echo "Pipeline failed!"
+            echo "❌ Pipeline failed - please check the logs above"
             exit 1
           fi
 
-          echo "Pipeline completed successfully!"
+          echo "✅ All required checks passed!"

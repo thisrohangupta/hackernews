@@ -1,0 +1,20 @@
+# CODEOWNERS - Define code ownership for automatic review requests
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owners for everything in the repo
+* @thisrohangupta
+
+# Security-sensitive files require security review
+internal/services/auth/ @thisrohangupta
+internal/middleware/ @thisrohangupta
+internal/storage/ @thisrohangupta
+
+# Configuration and CI/CD
+.github/ @thisrohangupta
+go.mod @thisrohangupta
+go.sum @thisrohangupta
+
+# Financial calculations require careful review
+internal/models/scenario.go @thisrohangupta
+internal/models/alert.go @thisrohangupta
+internal/services/analytics/ @thisrohangupta
