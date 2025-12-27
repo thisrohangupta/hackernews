@@ -1,0 +1,54 @@
+{{define "content"}}
+<div class="hero">
+    <h1>TrueNorth</h1>
+    <p class="hero-subtitle">Unified Portfolio Intelligence for Sophisticated Investors</p>
+
+    <div class="hero-features">
+        <div class="feature">
+            <h3>Unified View</h3>
+            <p>See all your accounts in one place. No more toggling between brokerages.</p>
+        </div>
+        <div class="feature">
+            <h3>Smart Analytics</h3>
+            <p>AI-powered classification and risk-reward analysis across all asset classes.</p>
+        </div>
+        <div class="feature">
+            <h3>What-If Scenarios</h3>
+            <p>Model allocation changes and see projected returns before you trade.</p>
+        </div>
+    </div>
+
+    <div class="hero-cta">
+        <a href="/register" class="btn btn-primary btn-lg">Get Started Free</a>
+        <a href="/login" class="btn btn-secondary btn-lg">Login</a>
+    </div>
+</div>
+
+<section class="section">
+    <h2>Built for DIY Investors</h2>
+    <p>TrueNorth helps investors with $5-10MM+ portfolios across multiple accounts get a clear picture of their true allocation.</p>
+
+    <div class="grid">
+        <div class="card">
+            <h3>CSV Import</h3>
+            <p>Upload exports from Schwab, Fidelity, Vanguard, and more. Auto-detect format.</p>
+        </div>
+        <div class="card">
+            <h3>Auto-Classification</h3>
+            <p>Tickers are automatically tagged by asset class, sector, and geography.</p>
+        </div>
+        <div class="card">
+            <h3>Concentration Alerts</h3>
+            <p>Get notified when positions exceed risk thresholds.</p>
+        </div>
+        <div class="card">
+            <h3>No Robo-Advice</h3>
+            <p>You stay in control. We provide intelligence, not investment decisions.</p>
+        </div>
+    </div>
+</section>
+{{end}}
+
+{{define "scripts"}}{{end}}
+
+{{template "base" .}}

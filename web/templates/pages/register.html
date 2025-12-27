@@ -1,0 +1,45 @@
+{{define "content"}}
+<div class="auth-container">
+    <div class="auth-box">
+        <h1>Create Account</h1>
+        <p>Start managing your portfolio today</p>
+
+        {{if .Error}}
+        <div class="alert alert-error">{{.Error}}</div>
+        {{end}}
+
+        <form method="POST" action="/register" class="auth-form">
+            <div class="form-group">
+                <label for="name">Full Name</label>
+                <input type="text" id="name" name="name" required autofocus>
+            </div>
+
+            <div class="form-group">
+                <label for="email">Email</label>
+                <input type="email" id="email" name="email" required>
+            </div>
+
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required minlength="8">
+                <small>At least 8 characters</small>
+            </div>
+
+            <div class="form-group">
+                <label for="confirm_password">Confirm Password</label>
+                <input type="password" id="confirm_password" name="confirm_password" required>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">Create Account</button>
+        </form>
+
+        <p class="auth-switch">
+            Already have an account? <a href="/login">Sign In</a>
+        </p>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}{{end}}
+
+{{template "base" .}}

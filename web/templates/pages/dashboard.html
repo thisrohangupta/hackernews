@@ -1,0 +1,202 @@
+{{define "content"}}
+<div class="dashboard">
+    <header class="dashboard-header">
+        <div class="header-left">
+            <h1>{{.Portfolio.Name}}</h1>
+            <p class="last-updated">Last updated: {{.Portfolio.LastUpdated.Format "Jan 2, 2006 3:04 PM"}}</p>
+        </div>
+        <div class="header-right">
+            <div class="portfolio-selector">
+                <select onchange="window.location.href='/dashboard?portfolio='+this.value">
+                    {{range .Portfolios}}
+                    <option value="{{.ID}}" {{if eq .ID $.Portfolio.ID}}selected{{end}}>{{.Name}}</option>
+                    {{end}}
+                </select>
+            </div>
+            <a href="/import?portfolio={{.Portfolio.ID}}" class="btn btn-primary">Import CSV</a>
+        </div>
+    </header>
+
+    {{if .AlertCount}}
+    <div class="alerts-banner">
+        <span class="alert-badge">{{.AlertCount}} Alert{{if gt .AlertCount 1}}s{{end}}</span>
+        {{range .Alerts}}
+        <div class="alert-item alert-{{.Severity}}">
+            <strong>{{.Title}}:</strong> {{.Message}}
+        </div>
+        {{end}}
+    </div>
+    {{end}}
+
+    {{if not .HasHoldings}}
+    <div class="empty-state">
+        <h2>No Holdings Yet</h2>
+        <p>Import a CSV from your brokerage to get started.</p>
+        <a href="/import?portfolio={{.Portfolio.ID}}" class="btn btn-primary btn-lg">Import Holdings</a>
+        <a href="/api/template.csv" class="btn btn-secondary">Download Template</a>
+    </div>
+    {{else}}
+
+    <div class="stats-grid">
+        <div class="stat-card">
+            <span class="stat-label">Total Value</span>
+            <span class="stat-value">${{printf "%.2f" .Portfolio.TotalValue.InexactFloat64}}</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Free Cash</span>
+            <span class="stat-value">${{printf "%.2f" .Portfolio.FreeCash.InexactFloat64}}</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Holdings</span>
+            <span class="stat-value">{{len .Portfolio.Holdings}}</span>
+        </div>
+        <div class="stat-card">
+            <span class="stat-label">Accounts</span>
+            <span class="stat-value">{{len .Allocation.ByAccount}}</span>
+        </div>
+    </div>
+
+    <div class="dashboard-grid">
+        <div class="card">
+            <h3>Asset Allocation</h3>
+            <div class="chart-container">
+                <canvas id="allocationChart"></canvas>
+            </div>
+            <div class="allocation-legend">
+                {{range $class, $slice := .Allocation.ByAssetClass}}
+                <div class="legend-item">
+                    <span class="legend-color" data-class="{{$class}}"></span>
+                    <span class="legend-label">{{$class.DisplayName}}</span>
+                    <span class="legend-value">{{printf "%.1f" $slice.Percentage.InexactFloat64}}%</span>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>Top 10 Holdings</h3>
+            <table class="holdings-table">
+                <thead>
+                    <tr>
+                        <th>Ticker</th>
+                        <th>Name</th>
+                        <th>Value</th>
+                        <th>%</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {{range .Allocation.TopHoldings}}
+                    <tr>
+                        <td><strong>{{.Ticker}}</strong></td>
+                        <td>{{.Name}}</td>
+                        <td>${{printf "%.0f" .MarketValue.InexactFloat64}}</td>
+                        <td>{{printf "%.1f" .Percentage.InexactFloat64}}%</td>
+                    </tr>
+                    {{end}}
+                </tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h3>By Sector</h3>
+            <div class="allocation-bars">
+                {{range $sector, $slice := .Allocation.BySector}}
+                <div class="bar-row">
+                    <span class="bar-label">{{$sector}}</span>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{$slice.Percentage.InexactFloat64}}%"></div>
+                    </div>
+                    <span class="bar-value">{{printf "%.1f" $slice.Percentage.InexactFloat64}}%</span>
+                </div>
+                {{end}}
+            </div>
+        </div>
+
+        <div class="card">
+            <h3>By Geography</h3>
+            <div class="allocation-bars">
+                {{range $geo, $slice := .Allocation.ByGeography}}
+                <div class="bar-row">
+                    <span class="bar-label">{{$geo}}</span>
+                    <div class="bar-track">
+                        <div class="bar-fill" style="width: {{$slice.Percentage.InexactFloat64}}%"></div>
+                    </div>
+                    <span class="bar-value">{{printf "%.1f" $slice.Percentage.InexactFloat64}}%</span>
+                </div>
+                {{end}}
+            </div>
+        </div>
+    </div>
+
+    <div class="card full-width">
+        <h3>All Holdings</h3>
+        <table class="holdings-table full">
+            <thead>
+                <tr>
+                    <th>Account</th>
+                    <th>Ticker</th>
+                    <th>Name</th>
+                    <th>Shares</th>
+                    <th>Price</th>
+                    <th>Value</th>
+                    <th>Class</th>
+                    <th>Sector</th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Portfolio.Holdings}}
+                <tr>
+                    <td>{{.AccountName}}</td>
+                    <td><strong>{{.Ticker}}</strong></td>
+                    <td>{{.Name}}</td>
+                    <td>{{printf "%.2f" .Quantity.InexactFloat64}}</td>
+                    <td>${{printf "%.2f" .CurrentPrice.InexactFloat64}}</td>
+                    <td>${{printf "%.0f" .MarketValue.InexactFloat64}}</td>
+                    <td><span class="tag tag-{{.AssetClass}}">{{.AssetClass.DisplayName}}</span></td>
+                    <td>{{.Sector}}</td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+
+    {{end}}
+</div>
+{{end}}
+
+{{define "scripts"}}
+{{if .HasHoldings}}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const ctx = document.getElementById('allocationChart');
+    if (!ctx) return;
+
+    const data = {
+        labels: [{{range $class, $slice := .Allocation.ByAssetClass}}'{{$class.DisplayName}}',{{end}}],
+        datasets: [{
+            data: [{{range $class, $slice := .Allocation.ByAssetClass}}{{$slice.Percentage.InexactFloat64}},{{end}}],
+            backgroundColor: [
+                '#6366f1', '#22c55e', '#f59e0b', '#ef4444', '#8b5cf6', '#64748b'
+            ],
+            borderWidth: 0
+        }]
+    };
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: data,
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            cutout: '60%'
+        }
+    });
+});
+</script>
+{{end}}
+{{end}}
+
+{{template "base" .}}
