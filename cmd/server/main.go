@@ -11,7 +11,9 @@ import (
 	"github.com/findosh/truenorth/internal/config"
 	"github.com/findosh/truenorth/internal/handlers"
 	"github.com/findosh/truenorth/internal/middleware"
+	"github.com/findosh/truenorth/internal/services/analytics"
 	"github.com/findosh/truenorth/internal/services/auth"
+	"github.com/findosh/truenorth/internal/services/marketdata"
 	"github.com/findosh/truenorth/internal/storage"
 )
 
@@ -40,6 +42,11 @@ func main() {
 
 	// Initialize services
 	authService := auth.NewService(cfg, userRepo, sessionRepo)
+	analyticsService := analytics.NewService()
+	marketDataService := marketdata.NewService(marketdata.Config{
+		Provider: marketdata.ProviderMock, // Use mock data for development
+		CacheTTL: 0,                        // Use default cache TTL
+	})
 
 	// Get template directory
 	templateDir := getTemplateDir()
@@ -49,6 +56,8 @@ func main() {
 		cfg,
 		templateDir,
 		authService,
+		analyticsService,
+		marketDataService,
 		userRepo,
 		portfolioRepo,
 		holdingRepo,
@@ -106,7 +115,7 @@ func main() {
 	})))
 	mux.Handle("/scenarios", authMiddleware.RequireAuth(http.HandlerFunc(h.ScenariosPage)))
 
-	// API routes
+	// API routes - Scenarios
 	mux.Handle("/api/scenarios/simulate", authMiddleware.RequireAuth(http.HandlerFunc(h.SimulateScenario)))
 	mux.Handle("/api/scenarios", authMiddleware.RequireAuth(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.Method {
@@ -119,6 +128,15 @@ func main() {
 		}
 	})))
 	mux.Handle("/api/template.csv", http.HandlerFunc(h.DownloadTemplate))
+
+	// API routes - Analytics (P1 features)
+	mux.Handle("/api/analytics/performance", authMiddleware.RequireAuth(http.HandlerFunc(h.APIPerformance)))
+	mux.Handle("/api/analytics/risk-reward", authMiddleware.RequireAuth(http.HandlerFunc(h.APIRiskReward)))
+	mux.Handle("/api/analytics/expenses", authMiddleware.RequireAuth(http.HandlerFunc(h.APIExpenses)))
+	mux.Handle("/api/analytics/time-series", authMiddleware.RequireAuth(http.HandlerFunc(h.APITimeSeries)))
+	mux.Handle("/api/market/status", http.HandlerFunc(h.APIMarketStatus))
+	mux.Handle("/api/market/quote", authMiddleware.RequireAuth(http.HandlerFunc(h.APIQuote)))
+	mux.Handle("/api/portfolio/refresh", authMiddleware.RequireAuth(http.HandlerFunc(h.APIRefreshPrices)))
 
 	// Apply global middleware
 	handler := middleware.Chain(

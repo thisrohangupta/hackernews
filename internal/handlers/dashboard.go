@@ -54,15 +54,39 @@ func (h *Handler) Dashboard(w http.ResponseWriter, r *http.Request) {
 	alertDetector := models.NewAlertDetector()
 	alerts := alertDetector.DetectAlerts(fullPortfolio, allocation)
 
+	// Calculate analytics (P1 features)
+	var performance *models.PortfolioPerformance
+	var riskReward *models.RiskRewardMatrix
+	var expenses *models.PortfolioExpenses
+	var marketStatus interface{}
+
+	if h.analyticsService != nil && len(fullPortfolio.Holdings) > 0 {
+		period := r.URL.Query().Get("period")
+		if period == "" {
+			period = models.Period1Year
+		}
+		performance = h.analyticsService.CalculatePortfolioPerformance(fullPortfolio, period)
+		riskReward = h.analyticsService.CalculateRiskRewardMatrix(fullPortfolio)
+		expenses = h.analyticsService.CalculateExpenses(fullPortfolio)
+	}
+
+	if h.marketDataSvc != nil {
+		marketStatus = h.marketDataSvc.GetMarketStatus()
+	}
+
 	data := map[string]interface{}{
-		"Title":       "Dashboard - TrueNorth",
-		"User":        user,
-		"Portfolios":  portfolios,
-		"Portfolio":   fullPortfolio,
-		"Allocation":  allocation,
-		"Alerts":      alerts,
-		"AlertCount":  len(alerts),
-		"HasHoldings": len(fullPortfolio.Holdings) > 0,
+		"Title":        "Dashboard - TrueNorth",
+		"User":         user,
+		"Portfolios":   portfolios,
+		"Portfolio":    fullPortfolio,
+		"Allocation":   allocation,
+		"Alerts":       alerts,
+		"AlertCount":   len(alerts),
+		"HasHoldings":  len(fullPortfolio.Holdings) > 0,
+		"Performance":  performance,
+		"RiskReward":   riskReward,
+		"Expenses":     expenses,
+		"MarketStatus": marketStatus,
 	}
 
 	h.render(w, "dashboard.html", data)

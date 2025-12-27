@@ -2,24 +2,30 @@
 package handlers
 
 import (
+	"fmt"
 	"html/template"
 	"net/http"
 	"path/filepath"
 
 	"github.com/findosh/truenorth/internal/config"
+	"github.com/findosh/truenorth/internal/services/analytics"
 	"github.com/findosh/truenorth/internal/services/auth"
+	"github.com/findosh/truenorth/internal/services/marketdata"
 	"github.com/findosh/truenorth/internal/storage"
+	"github.com/shopspring/decimal"
 )
 
 // Handler contains all HTTP handlers and dependencies
 type Handler struct {
-	cfg           *config.Config
-	templates     *template.Template
-	authService   *auth.Service
-	userRepo      *storage.UserRepository
-	portfolioRepo *storage.PortfolioRepository
-	holdingRepo   *storage.HoldingRepository
-	scenarioRepo  *storage.ScenarioRepository
+	cfg              *config.Config
+	templates        *template.Template
+	authService      *auth.Service
+	analyticsService *analytics.Service
+	marketDataSvc    *marketdata.Service
+	userRepo         *storage.UserRepository
+	portfolioRepo    *storage.PortfolioRepository
+	holdingRepo      *storage.HoldingRepository
+	scenarioRepo     *storage.ScenarioRepository
 }
 
 // New creates a new handler with all dependencies
@@ -27,6 +33,8 @@ func New(
 	cfg *config.Config,
 	templateDir string,
 	authService *auth.Service,
+	analyticsService *analytics.Service,
+	marketDataSvc *marketdata.Service,
 	userRepo *storage.UserRepository,
 	portfolioRepo *storage.PortfolioRepository,
 	holdingRepo *storage.HoldingRepository,
@@ -44,13 +52,15 @@ func New(
 	}
 
 	return &Handler{
-		cfg:           cfg,
-		templates:     tmpl,
-		authService:   authService,
-		userRepo:      userRepo,
-		portfolioRepo: portfolioRepo,
-		holdingRepo:   holdingRepo,
-		scenarioRepo:  scenarioRepo,
+		cfg:              cfg,
+		templates:        tmpl,
+		authService:      authService,
+		analyticsService: analyticsService,
+		marketDataSvc:    marketDataSvc,
+		userRepo:         userRepo,
+		portfolioRepo:    portfolioRepo,
+		holdingRepo:      holdingRepo,
+		scenarioRepo:     scenarioRepo,
 	}, nil
 }
 
@@ -86,46 +96,103 @@ func parseTemplates(dir string) (*template.Template, error) {
 
 func templateFuncs() template.FuncMap {
 	return template.FuncMap{
-		"formatMoney": formatMoney,
+		"formatMoney":   formatMoney,
 		"formatPercent": formatPercent,
-		"add": func(a, b int) int { return a + b },
-		"sub": func(a, b int) int { return a - b },
+		"formatDecimal": formatDecimal,
+		"add":           func(a, b int) int { return a + b },
+		"sub":           func(a, b int) int { return a - b },
+		"isPositive":    isPositive,
+		"isNegative":    isNegative,
+		"signClass":     signClass,
 	}
 }
 
 func formatMoney(v interface{}) string {
-	switch val := v.(type) {
+	var val float64
+	switch t := v.(type) {
 	case float64:
-		if val >= 1000000 {
-			return "$" + formatFloat(val/1000000) + "M"
-		} else if val >= 1000 {
-			return "$" + formatFloat(val/1000) + "K"
-		}
-		return "$" + formatFloat(val)
+		val = t
+	case decimal.Decimal:
+		val = t.InexactFloat64()
 	case string:
-		return "$" + val
+		return "$" + t
 	default:
 		return "$0"
 	}
+
+	if val >= 1000000 {
+		return fmt.Sprintf("$%.2fM", val/1000000)
+	} else if val >= 1000 {
+		return fmt.Sprintf("$%.2fK", val/1000)
+	}
+	return fmt.Sprintf("$%.2f", val)
 }
 
 func formatPercent(v interface{}) string {
-	switch val := v.(type) {
+	var val float64
+	switch t := v.(type) {
 	case float64:
-		return formatFloat(val) + "%"
+		val = t
+	case decimal.Decimal:
+		val = t.InexactFloat64()
 	case string:
-		return val + "%"
+		return t + "%"
 	default:
 		return "0%"
 	}
+	return fmt.Sprintf("%.2f%%", val)
 }
 
-func formatFloat(v float64) string {
-	if v == float64(int(v)) {
-		return string(rune(int(v)))
+func formatDecimal(v interface{}) string {
+	switch t := v.(type) {
+	case decimal.Decimal:
+		return t.StringFixed(2)
+	case float64:
+		return fmt.Sprintf("%.2f", t)
+	default:
+		return "0.00"
 	}
-	// Simple formatting
-	return string(rune(int(v*100))) + string(rune(int(v*10)%10))
+}
+
+func isPositive(v interface{}) bool {
+	switch t := v.(type) {
+	case decimal.Decimal:
+		return t.IsPositive()
+	case float64:
+		return t > 0
+	default:
+		return false
+	}
+}
+
+func isNegative(v interface{}) bool {
+	switch t := v.(type) {
+	case decimal.Decimal:
+		return t.IsNegative()
+	case float64:
+		return t < 0
+	default:
+		return false
+	}
+}
+
+func signClass(v interface{}) string {
+	var val float64
+	switch t := v.(type) {
+	case decimal.Decimal:
+		val = t.InexactFloat64()
+	case float64:
+		val = t
+	default:
+		return ""
+	}
+
+	if val > 0 {
+		return "positive"
+	} else if val < 0 {
+		return "negative"
+	}
+	return ""
 }
 
 // render renders a template with the given data
