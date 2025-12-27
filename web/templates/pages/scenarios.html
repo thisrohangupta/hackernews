@@ -1,0 +1,238 @@
+{{define "content"}}
+<div class="scenarios-page">
+    <header class="page-header">
+        <h1>What-If Scenarios</h1>
+        <p>Model allocation changes and see projected returns</p>
+    </header>
+
+    <div class="scenarios-grid">
+        <div class="card scenario-builder">
+            <h3>Build Scenario</h3>
+            <form id="scenarioForm">
+                <input type="hidden" name="portfolio_id" value="{{.Portfolio.ID}}">
+
+                <div class="allocation-sliders">
+                    {{range .AssetClasses}}
+                    <div class="slider-row">
+                        <label>{{.DisplayName}}</label>
+                        <input type="range" name="{{.}}" min="0" max="100" value="0" class="allocation-slider">
+                        <span class="slider-value">0%</span>
+                    </div>
+                    {{end}}
+                </div>
+
+                <div class="total-row">
+                    <span>Total Allocation:</span>
+                    <span id="totalAllocation">0%</span>
+                    <span id="allocationStatus" class="status-invalid">Must equal 100%</span>
+                </div>
+
+                <button type="button" id="simulateBtn" class="btn btn-primary btn-block">Simulate</button>
+            </form>
+        </div>
+
+        <div class="card scenario-results" id="resultsCard" style="display: none;">
+            <h3>Projected Returns</h3>
+
+            <div class="projections-grid">
+                <div class="projection-item best">
+                    <span class="projection-label">Best Year</span>
+                    <span class="projection-value" id="bestCase">-</span>
+                </div>
+                <div class="projection-item average">
+                    <span class="projection-label">Average</span>
+                    <span class="projection-value" id="avgCase">-</span>
+                </div>
+                <div class="projection-item worst">
+                    <span class="projection-label">Worst Year</span>
+                    <span class="projection-value" id="worstCase">-</span>
+                </div>
+            </div>
+
+            <div class="expected-value">
+                <h4>Expected Value (1 Year)</h4>
+                <span class="expected-amount" id="expectedValue">-</span>
+                <small>Based on average historical returns</small>
+            </div>
+
+            <div class="save-scenario">
+                <input type="text" id="scenarioName" placeholder="Scenario name">
+                <button type="button" id="saveBtn" class="btn btn-secondary">Save Scenario</button>
+            </div>
+        </div>
+
+        <div class="card current-allocation">
+            <h3>Current Allocation</h3>
+            <div class="allocation-display">
+                {{range $class, $pct := .CurrentAlloc}}
+                <div class="current-item">
+                    <span class="current-label">{{$class}}</span>
+                    <span class="current-value">{{printf "%.1f" $pct}}%</span>
+                </div>
+                {{end}}
+            </div>
+            <button type="button" id="useCurrentBtn" class="btn btn-secondary btn-block">Use Current as Starting Point</button>
+        </div>
+    </div>
+
+    {{if .Scenarios}}
+    <div class="card">
+        <h3>Saved Scenarios</h3>
+        <table class="scenarios-table">
+            <thead>
+                <tr>
+                    <th>Name</th>
+                    <th>Best Case</th>
+                    <th>Average</th>
+                    <th>Worst Case</th>
+                    <th>Created</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {{range .Scenarios}}
+                <tr>
+                    <td>{{.Name}}</td>
+                    <td class="positive">{{printf "%.1f" .Projections.BestCase.InexactFloat64}}%</td>
+                    <td>{{printf "%.1f" .Projections.AverageCase.InexactFloat64}}%</td>
+                    <td class="negative">{{printf "%.1f" .Projections.WorstCase.InexactFloat64}}%</td>
+                    <td>{{.CreatedAt.Format "Jan 2, 2006"}}</td>
+                    <td>
+                        <button class="btn btn-sm btn-danger delete-scenario" data-id="{{.ID}}">Delete</button>
+                    </td>
+                </tr>
+                {{end}}
+            </tbody>
+        </table>
+    </div>
+    {{end}}
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const sliders = document.querySelectorAll('.allocation-slider');
+    const totalEl = document.getElementById('totalAllocation');
+    const statusEl = document.getElementById('allocationStatus');
+    const resultsCard = document.getElementById('resultsCard');
+    const portfolioId = '{{.Portfolio.ID}}';
+
+    // Current allocation data
+    const currentAlloc = {
+        {{range $class, $pct := .CurrentAlloc}}
+        '{{$class}}': {{$pct}},
+        {{end}}
+    };
+
+    function updateTotal() {
+        let total = 0;
+        sliders.forEach(slider => {
+            total += parseInt(slider.value);
+            slider.nextElementSibling.textContent = slider.value + '%';
+        });
+        totalEl.textContent = total + '%';
+
+        if (total === 100) {
+            statusEl.textContent = 'Valid';
+            statusEl.className = 'status-valid';
+        } else {
+            statusEl.textContent = 'Must equal 100%';
+            statusEl.className = 'status-invalid';
+        }
+    }
+
+    sliders.forEach(slider => {
+        slider.addEventListener('input', updateTotal);
+    });
+
+    // Use current allocation
+    document.getElementById('useCurrentBtn').addEventListener('click', function() {
+        sliders.forEach(slider => {
+            const name = slider.name;
+            if (currentAlloc[name]) {
+                slider.value = Math.round(currentAlloc[name]);
+            }
+        });
+        updateTotal();
+    });
+
+    // Simulate
+    document.getElementById('simulateBtn').addEventListener('click', async function() {
+        const allocations = {};
+        sliders.forEach(slider => {
+            allocations[slider.name] = parseInt(slider.value);
+        });
+
+        try {
+            const response = await fetch('/api/scenarios/simulate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    portfolio_id: portfolioId,
+                    allocations: allocations
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.projections) {
+                document.getElementById('bestCase').textContent = data.projections.best_case.toFixed(1) + '%';
+                document.getElementById('avgCase').textContent = data.projections.average_case.toFixed(1) + '%';
+                document.getElementById('worstCase').textContent = data.projections.worst_case.toFixed(1) + '%';
+                document.getElementById('expectedValue').textContent = '$' + data.projections.expected_value.toLocaleString();
+                resultsCard.style.display = 'block';
+            }
+        } catch (err) {
+            console.error('Simulation failed:', err);
+        }
+    });
+
+    // Save scenario
+    document.getElementById('saveBtn').addEventListener('click', async function() {
+        const name = document.getElementById('scenarioName').value || 'Saved Scenario';
+        const allocations = {};
+        sliders.forEach(slider => {
+            allocations[slider.name] = parseInt(slider.value);
+        });
+
+        try {
+            const response = await fetch('/api/scenarios', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    portfolio_id: portfolioId,
+                    name: name,
+                    allocations: allocations
+                })
+            });
+
+            if (response.ok) {
+                window.location.reload();
+            }
+        } catch (err) {
+            console.error('Save failed:', err);
+        }
+    });
+
+    // Delete scenario
+    document.querySelectorAll('.delete-scenario').forEach(btn => {
+        btn.addEventListener('click', async function() {
+            const id = this.dataset.id;
+            if (confirm('Delete this scenario?')) {
+                try {
+                    await fetch('/api/scenarios?id=' + id, { method: 'DELETE' });
+                    window.location.reload();
+                } catch (err) {
+                    console.error('Delete failed:', err);
+                }
+            }
+        });
+    });
+
+    updateTotal();
+});
+</script>
+{{end}}
+
+{{template "base" .}}

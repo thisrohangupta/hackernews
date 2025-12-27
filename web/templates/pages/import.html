@@ -1,0 +1,96 @@
+{{define "content"}}
+<div class="import-page">
+    <header class="page-header">
+        <h1>Import Holdings</h1>
+        <p>Upload a CSV export from your brokerage</p>
+    </header>
+
+    {{if .Error}}
+    <div class="alert alert-error">{{.Error}}</div>
+    {{end}}
+
+    {{if .Success}}
+    <div class="alert alert-success">{{.Success}}</div>
+    {{end}}
+
+    <div class="card">
+        <h3>Upload CSV File</h3>
+        <form method="POST" action="/import" enctype="multipart/form-data" class="import-form">
+            <input type="hidden" name="portfolio_id" value="{{.PortfolioID}}">
+
+            <div class="form-group">
+                <label for="account_name">Account Name</label>
+                <input type="text" id="account_name" name="account_name" placeholder="e.g., Schwab IRA, Fidelity 401k">
+                <small>Give this account a name to identify it later</small>
+            </div>
+
+            <div class="form-group">
+                <label for="csv_file">CSV File</label>
+                <div class="file-upload">
+                    <input type="file" id="csv_file" name="csv_file" accept=".csv" required>
+                    <div class="file-upload-label">
+                        <span>Choose file or drag here</span>
+                    </div>
+                </div>
+            </div>
+
+            <button type="submit" class="btn btn-primary btn-block">Import Holdings</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h3>Supported Brokerages</h3>
+        <div class="brokerage-grid">
+            <div class="brokerage-item">
+                <h4>Charles Schwab</h4>
+                <p>Export from Positions → Export → CSV</p>
+            </div>
+            <div class="brokerage-item">
+                <h4>Fidelity</h4>
+                <p>Portfolio → Positions → Download</p>
+            </div>
+            <div class="brokerage-item">
+                <h4>Vanguard</h4>
+                <p>My Accounts → Download center → CSV</p>
+            </div>
+            <div class="brokerage-item">
+                <h4>Other</h4>
+                <p>Generic CSV with Symbol, Quantity, Price columns</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h3>CSV Format</h3>
+        <p>Your CSV should include columns for:</p>
+        <ul>
+            <li><strong>Symbol/Ticker</strong> - Stock or fund symbol</li>
+            <li><strong>Description/Name</strong> - Security name</li>
+            <li><strong>Quantity/Shares</strong> - Number of shares</li>
+            <li><strong>Price</strong> - Current price per share</li>
+            <li><strong>Market Value</strong> - Total value (optional)</li>
+            <li><strong>Cost Basis</strong> - Your cost basis (optional)</li>
+        </ul>
+        <a href="/api/template.csv" class="btn btn-secondary">Download Template</a>
+    </div>
+</div>
+{{end}}
+
+{{define "scripts"}}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const fileInput = document.getElementById('csv_file');
+    const fileLabel = document.querySelector('.file-upload-label span');
+
+    if (fileInput && fileLabel) {
+        fileInput.addEventListener('change', function() {
+            if (this.files.length > 0) {
+                fileLabel.textContent = this.files[0].name;
+            }
+        });
+    }
+});
+</script>
+{{end}}
+
+{{template "base" .}}

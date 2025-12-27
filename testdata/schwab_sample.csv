@@ -1,0 +1,10 @@
+Symbol,Description,Quantity,Price,Market Value,Cost Basis
+AAPL,Apple Inc.,100,175.50,17550.00,15000.00
+MSFT,Microsoft Corporation,50,378.25,18912.50,16000.00
+GOOGL,Alphabet Inc.,25,140.50,3512.50,3000.00
+AMZN,Amazon.com Inc.,30,155.75,4672.50,4000.00
+NVDA,NVIDIA Corporation,40,480.25,19210.00,12000.00
+VOO,Vanguard S&P 500 ETF,60,425.00,25500.00,22000.00
+BND,Vanguard Total Bond Market ETF,100,72.50,7250.00,7500.00
+VNQ,Vanguard Real Estate ETF,50,82.30,4115.00,4500.00
+SPAXX,Fidelity Government Money Market,25000,1.00,25000.00,25000.00
