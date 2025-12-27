@@ -213,10 +213,15 @@ func cleanTicker(s string) string {
 	s = strings.TrimSpace(s)
 	s = strings.ToUpper(s)
 
-	// Remove common suffixes
-	suffixes := []string{" ", "*", "**"}
-	for _, suffix := range suffixes {
-		s = strings.TrimSuffix(s, suffix)
+	// Remove common suffixes (loop to handle multiple)
+	for {
+		trimmed := s
+		trimmed = strings.TrimSuffix(trimmed, " ")
+		trimmed = strings.TrimSuffix(trimmed, "*")
+		if trimmed == s {
+			break
+		}
+		s = trimmed
 	}
 
 	return s
