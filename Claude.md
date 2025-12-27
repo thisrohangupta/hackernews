@@ -1,84 +1,601 @@
-# Claude.md - Engineering Architecture Guide
+# Claude.md - FinDosh TrueNorth Architecture Guide
 
-## Project Overview
+## Product Overview
 
-This is a **Go-based static site generator** that creates a HackerNews clone by fetching top stories from the HackerNews API and rendering them as a static HTML website.
+**TrueNorth** is a unified portfolio intelligence platform for sophisticated DIY investors managing $5-10MM+ across multiple accounts. It provides real-time performance tracking, integrated risk-reward analytics, and what-if scenario modeling—without robo-advisory.
 
-**Primary Goal:** Provide a clean, fast, and maintainable news aggregation platform that can serve as a foundation for financial news and investment content curation.
+### Core Value Propositions
+- **Time Savings:** Eliminate hours of monthly account reconciliation
+- **Unified Visibility:** True asset allocation across all accounts with zero "Unknown" categories
+- **Actionable Intelligence:** Multi-class risk-reward matrix for informed decisions
+- **DIY Control:** What-if scenarios without algorithmic trading
+
+### Target User
+```
+Persona: "Sophisticated DIY Investor"
+Portfolio: $5-10MM across 5+ accounts
+Pain: Fragmented views, manual reconciliation, no cross-class analytics
+Goal: Superior risk-adjusted returns with full process control
+```
 
 ---
 
 ## Architecture Principles
 
-### 1. Simplicity First
-- **Every function should do one thing well**
-- Avoid premature abstraction - only refactor when patterns emerge
-- Prefer explicit code over clever code
-- Any developer should understand the codebase within 30 minutes
-
-### 2. Clean Separation of Concerns
+### 1. Security First (Non-Negotiable)
 ```
-┌─────────────────┐     ┌─────────────────┐     ┌─────────────────┐
-│   Data Layer    │ ──▶ │  Business Logic │ ──▶ │  Presentation   │
-│  (API/Storage)  │     │  (Processing)   │     │  (Templates)    │
-└─────────────────┘     └─────────────────┘     └─────────────────┘
+┌─────────────────────────────────────────────────────────────┐
+│  SECURITY REQUIREMENTS                                       │
+├─────────────────────────────────────────────────────────────┤
+│  • 256-bit AES encryption at rest                           │
+│  • TLS 1.3 for all data in transit                          │
+│  • Read-only data model - NO trade execution                │
+│  • NO credential storage - CSV upload only (MVP)            │
+│  • MFA required for all accounts                            │
+│  • SOC 2 Type II compliance roadmap                         │
+└─────────────────────────────────────────────────────────────┘
 ```
 
-### 3. Fail Gracefully
-- Network errors should not crash the application
-- Missing data should be handled with sensible defaults
-- Always log errors with context for debugging
+### 2. Simplicity & Clarity
+- Every function does one thing well
+- Any developer should understand any module within 30 minutes
+- Explicit code over clever abstractions
+- Document the WHY, not the WHAT
 
-### 4. Security by Default
-- Escape all user-generated content (titles, authors)
-- Use HTTPS for all external API calls
-- No client-side JavaScript injection risks
+### 3. Financial Data Accuracy
+- All monetary values use `decimal` types, never floating point
+- Currency always explicit (USD default)
+- Timestamps in UTC with timezone awareness
+- Audit trail for all data modifications
+
+### 4. Graceful Degradation
+- Network failures don't crash the application
+- Missing data shows clear indicators, not errors
+- Partial uploads should be resumable
 
 ---
 
-## Current Architecture
+## Tech Stack
 
-### Directory Structure
+### Backend (Go)
 ```
-hackernews/
-├── main.go              # Core application logic
-├── go.mod               # Go module definition
-├── Claude.md            # This architecture guide
-├── README.md            # User documentation
-├── templates/
-│   └── index.html       # HTML template
-├── static/
-│   └── style.css        # Stylesheet
-└── public/              # Generated output (gitignored)
-    ├── index.html
-    └── static/
-        └── style.css
+Language:    Go 1.21+
+Framework:   Standard library + minimal dependencies
+Database:    SQLite (MVP) → PostgreSQL (Production)
+Auth:        JWT with secure httpOnly cookies
+Encryption:  AES-256-GCM for sensitive data
 ```
 
-### Data Flow
+### Frontend
 ```
-HackerNews API → Fetch Stories → Process Data → Render HTML → Write Files
+Approach:    Server-rendered HTML + minimal JavaScript
+Templates:   Go html/template with components
+Styling:     CSS with custom properties (theming support)
+Charts:      Chart.js or D3.js for visualizations
 ```
 
-### Key Data Structures
+### Why This Stack?
+- **Go:** Fast, secure, excellent for financial applications
+- **SQLite → PostgreSQL:** Simple start, scales when needed
+- **Server-rendered:** Faster initial load, better security, simpler architecture
+- **Minimal JS:** Reduces attack surface, improves reliability
 
+---
+
+## Project Structure
+
+```
+truenorth/
+├── cmd/
+│   └── server/
+│       └── main.go                 # Application entry point
+│
+├── internal/
+│   ├── config/
+│   │   └── config.go               # Configuration management
+│   │
+│   ├── models/                     # Core domain models
+│   │   ├── user.go                 # User account
+│   │   ├── portfolio.go            # OmniFolio (o'Folio)
+│   │   ├── holding.go              # Individual position
+│   │   ├── asset.go                # Asset metadata (ticker info)
+│   │   └── scenario.go             # What-if scenarios
+│   │
+│   ├── services/                   # Business logic
+│   │   ├── auth/
+│   │   │   └── auth.go             # Authentication service
+│   │   ├── portfolio/
+│   │   │   ├── aggregator.go       # Multi-account aggregation
+│   │   │   ├── allocation.go       # Allocation calculations
+│   │   │   └── performance.go      # Performance metrics
+│   │   ├── import/
+│   │   │   ├── csv_parser.go       # CSV parsing engine
+│   │   │   ├── schwab.go           # Schwab format handler
+│   │   │   ├── fidelity.go         # Fidelity format handler
+│   │   │   ├── vanguard.go         # Vanguard format handler
+│   │   │   └── tagger.go           # AI ticker classification
+│   │   ├── analytics/
+│   │   │   ├── risk_reward.go      # R2R matrix calculations
+│   │   │   ├── alerts.go           # Concentration/overlap alerts
+│   │   │   └── scenarios.go        # What-if simulations
+│   │   └── market/
+│   │       ├── prices.go           # Real-time price service
+│   │       └── news.go             # News aggregation
+│   │
+│   ├── handlers/                   # HTTP handlers
+│   │   ├── auth.go                 # Login/logout/register
+│   │   ├── dashboard.go            # Main dashboard
+│   │   ├── import.go               # CSV upload endpoints
+│   │   ├── portfolio.go            # Portfolio views
+│   │   ├── scenarios.go            # What-if interface
+│   │   └── api.go                  # JSON API endpoints
+│   │
+│   ├── middleware/
+│   │   ├── auth.go                 # Authentication middleware
+│   │   ├── security.go             # Security headers, CSRF
+│   │   └── logging.go              # Request logging
+│   │
+│   └── storage/
+│       ├── database.go             # Database connection
+│       ├── users.go                # User repository
+│       ├── portfolios.go           # Portfolio repository
+│       └── migrations/             # Schema migrations
+│
+├── web/
+│   ├── templates/
+│   │   ├── layouts/
+│   │   │   └── base.html           # Base layout with nav
+│   │   ├── pages/
+│   │   │   ├── login.html
+│   │   │   ├── dashboard.html
+│   │   │   ├── import.html
+│   │   │   ├── portfolio.html
+│   │   │   └── scenarios.html
+│   │   └── components/
+│   │       ├── allocation_chart.html
+│   │       ├── holdings_table.html
+│   │       ├── alert_badge.html
+│   │       └── scenario_slider.html
+│   │
+│   └── static/
+│       ├── css/
+│       │   ├── main.css
+│       │   └── charts.css
+│       ├── js/
+│       │   ├── charts.js
+│       │   └── scenarios.js
+│       └── images/
+│
+├── testdata/                       # Sample CSV files for testing
+│   ├── schwab_sample.csv
+│   ├── fidelity_sample.csv
+│   └── vanguard_sample.csv
+│
+├── go.mod
+├── go.sum
+├── Claude.md                       # This file
+└── README.md
+```
+
+---
+
+## Core Data Models
+
+### User
 ```go
-// Story represents a single news item
-// In a fintech context, this could represent market news, SEC filings, or earnings reports
-type Story struct {
-    ID    int    // Unique identifier
-    Title string // Headline
-    By    string // Author/Source
-    Score int    // Relevance score (upvotes)
-    URL   string // Source link
-    Time  int64  // Unix timestamp
-}
-
-// PageData contains all data needed to render a page
-type PageData struct {
-    Stories template.HTML // Pre-rendered HTML content
+// User represents an authenticated investor
+type User struct {
+    ID           uuid.UUID  `json:"id"`
+    Email        string     `json:"email"`
+    PasswordHash string     `json:"-"`  // Never serialize
+    Name         string     `json:"name"`
+    MFAEnabled   bool       `json:"mfa_enabled"`
+    CreatedAt    time.Time  `json:"created_at"`
+    UpdatedAt    time.Time  `json:"updated_at"`
 }
 ```
+
+### Portfolio (OmniFolio)
+```go
+// Portfolio represents a unified view across all accounts
+type Portfolio struct {
+    ID          uuid.UUID   `json:"id"`
+    UserID      uuid.UUID   `json:"user_id"`
+    Name        string      `json:"name"`        // e.g., "Family Portfolio"
+    Holdings    []Holding   `json:"holdings"`
+    TotalValue  Decimal     `json:"total_value"` // Calculated
+    FreeCash    Decimal     `json:"free_cash"`
+    LastUpdated time.Time   `json:"last_updated"`
+}
+```
+
+### Holding
+```go
+// Holding represents a single position in an account
+type Holding struct {
+    ID            uuid.UUID   `json:"id"`
+    PortfolioID   uuid.UUID   `json:"portfolio_id"`
+    AccountName   string      `json:"account_name"`   // e.g., "Schwab IRA"
+    Ticker        string      `json:"ticker"`         // e.g., "AAPL"
+    Name          string      `json:"name"`           // e.g., "Apple Inc."
+    Quantity      Decimal     `json:"quantity"`
+    CostBasis     Decimal     `json:"cost_basis"`
+    CurrentPrice  Decimal     `json:"current_price"`
+    MarketValue   Decimal     `json:"market_value"`
+
+    // Classification (AI-tagged or manual)
+    AssetClass    AssetClass  `json:"asset_class"`    // Equity, FixedIncome, Alternative, Cash
+    Sector        string      `json:"sector"`         // Technology, Healthcare, etc.
+    Geography     string      `json:"geography"`      // US, International, Emerging
+
+    // Metadata
+    IsManualEntry bool        `json:"is_manual_entry"`
+    Source        string      `json:"source"`         // "schwab_csv", "manual"
+    ImportedAt    time.Time   `json:"imported_at"`
+}
+
+// AssetClass enumeration
+type AssetClass string
+
+const (
+    AssetClassEquity      AssetClass = "equity"
+    AssetClassFixedIncome AssetClass = "fixed_income"
+    AssetClassAlternative AssetClass = "alternative"  // PE, VC, Real Estate
+    AssetClassCrypto      AssetClass = "crypto"
+    AssetClassCash        AssetClass = "cash"
+    AssetClassOther       AssetClass = "other"        // Should be zero in final view
+)
+```
+
+### Allocation Summary
+```go
+// AllocationSummary provides portfolio breakdown
+type AllocationSummary struct {
+    ByAssetClass map[AssetClass]AllocationSlice `json:"by_asset_class"`
+    BySector     map[string]AllocationSlice     `json:"by_sector"`
+    ByGeography  map[string]AllocationSlice     `json:"by_geography"`
+    TopHoldings  []HoldingSummary               `json:"top_holdings"`  // Top 10
+    TickerTotals map[string]Decimal             `json:"ticker_totals"` // Cross-account
+}
+
+type AllocationSlice struct {
+    Value      Decimal `json:"value"`
+    Percentage Decimal `json:"percentage"`
+    Count      int     `json:"count"`  // Number of positions
+}
+```
+
+### Scenario
+```go
+// Scenario represents a what-if allocation model
+type Scenario struct {
+    ID           uuid.UUID                    `json:"id"`
+    PortfolioID  uuid.UUID                    `json:"portfolio_id"`
+    Name         string                       `json:"name"`
+    Allocations  map[AssetClass]Decimal       `json:"allocations"` // Target %
+    Projections  ScenarioProjections          `json:"projections"`
+    CreatedAt    time.Time                    `json:"created_at"`
+}
+
+type ScenarioProjections struct {
+    BestCase    Decimal `json:"best_case"`    // Best year return
+    WorstCase   Decimal `json:"worst_case"`   // Worst year return
+    AverageCase Decimal `json:"average_case"` // Average return
+    MaxDrawdown Decimal `json:"max_drawdown"` // Maximum drawdown
+}
+```
+
+---
+
+## CSV Import System
+
+### Supported Brokerages (MVP)
+| Brokerage | Format | Key Columns |
+|-----------|--------|-------------|
+| Schwab | CSV | Symbol, Description, Quantity, Price, Market Value |
+| Fidelity | CSV | Symbol, Description, Quantity, Last Price, Current Value |
+| Vanguard | CSV | Symbol, Investment Name, Shares, Share Price, Total Value |
+
+### Parser Architecture
+```go
+// CSVParser interface for brokerage-specific implementations
+type CSVParser interface {
+    // Parse reads CSV data and returns normalized holdings
+    Parse(reader io.Reader) ([]Holding, error)
+
+    // Detect checks if this parser handles the given CSV format
+    Detect(header []string) bool
+}
+
+// Import flow:
+// 1. User uploads CSV
+// 2. System detects brokerage format
+// 3. Parser extracts holdings
+// 4. Tagger classifies each ticker (asset class, sector, geography)
+// 5. User reviews/corrects classifications
+// 6. Holdings saved to portfolio
+```
+
+### Ticker Tagger
+```go
+// TickerTagger classifies securities by asset class, sector, geography
+type TickerTagger interface {
+    // Tag returns classification for a ticker
+    Tag(ticker string) (*TickerClassification, error)
+
+    // TagBatch efficiently classifies multiple tickers
+    TagBatch(tickers []string) (map[string]*TickerClassification, error)
+}
+
+type TickerClassification struct {
+    Ticker     string     `json:"ticker"`
+    AssetClass AssetClass `json:"asset_class"`
+    Sector     string     `json:"sector"`
+    Geography  string     `json:"geography"`
+    Confidence float64    `json:"confidence"` // 0.0 - 1.0
+}
+```
+
+---
+
+## Risk-Reward Matrix (R2R)
+
+### Calculation Methodology
+```go
+// RiskRewardScore for a single holding or asset class
+type RiskRewardScore struct {
+    ExpectedReturn Decimal `json:"expected_return"` // Annualized
+    Volatility     Decimal `json:"volatility"`      // Standard deviation
+    SharpeRatio    Decimal `json:"sharpe_ratio"`    // Risk-adjusted return
+    MaxDrawdown    Decimal `json:"max_drawdown"`    // Historical worst
+    Beta           Decimal `json:"beta"`            // Market correlation
+}
+
+// Historical data periods
+const (
+    Period1Year  = "1y"
+    Period3Year  = "3y"
+    Period5Year  = "5y"  // Default for analysis
+    Period10Year = "10y"
+)
+```
+
+### Matrix Visualization
+```
+                    HIGH RETURN
+                         │
+         ┌───────────────┼───────────────┐
+         │   Aggressive  │   Optimal     │
+         │   Growth      │   Growth      │
+         │               │               │
+LOW RISK─┼───────────────┼───────────────┼─HIGH RISK
+         │               │               │
+         │   Capital     │   High Risk   │
+         │   Preservation│   Speculation │
+         └───────────────┼───────────────┘
+                         │
+                    LOW RETURN
+```
+
+---
+
+## Alert System
+
+### Alert Types
+```go
+type AlertType string
+
+const (
+    AlertConcentration  AlertType = "concentration"   // >10% in single ticker
+    AlertOverlap        AlertType = "overlap"         // Same ticker in 3+ accounts
+    AlertHighExpense    AlertType = "high_expense"    // Expense ratio >1%
+    AlertUnclassified   AlertType = "unclassified"    // Holdings in "Other"
+    AlertCashDrag       AlertType = "cash_drag"       // >10% in cash
+    AlertSectorTilt     AlertType = "sector_tilt"     // >30% in single sector
+)
+
+type Alert struct {
+    Type        AlertType `json:"type"`
+    Severity    string    `json:"severity"`  // "info", "warning", "critical"
+    Message     string    `json:"message"`
+    Holdings    []string  `json:"holdings"`  // Affected tickers
+    Suggestion  string    `json:"suggestion"`
+}
+```
+
+### Thresholds (Configurable)
+| Alert | Default Threshold | Severity |
+|-------|-------------------|----------|
+| Single Position Concentration | >10% | Warning |
+| Sector Concentration | >30% | Warning |
+| Cash Drag | >10% | Info |
+| Expense Ratio | >1% | Warning |
+| Unclassified Holdings | >0 | Critical |
+
+---
+
+## Security Implementation
+
+### Authentication Flow
+```
+┌──────────┐      ┌──────────┐      ┌──────────┐
+│  Login   │ ───▶ │  Verify  │ ───▶ │  Issue   │
+│  Form    │      │  Creds   │      │  JWT     │
+└──────────┘      └──────────┘      └──────────┘
+                                          │
+                                          ▼
+┌──────────┐      ┌──────────┐      ┌──────────┐
+│  Access  │ ◀─── │  Verify  │ ◀─── │  Cookie  │
+│  Granted │      │  Token   │      │ httpOnly │
+└──────────┘      └──────────┘      └──────────┘
+```
+
+### Security Headers
+```go
+// Required security headers for all responses
+func SecurityHeaders(next http.Handler) http.Handler {
+    return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+        w.Header().Set("X-Content-Type-Options", "nosniff")
+        w.Header().Set("X-Frame-Options", "DENY")
+        w.Header().Set("X-XSS-Protection", "1; mode=block")
+        w.Header().Set("Strict-Transport-Security", "max-age=31536000")
+        w.Header().Set("Content-Security-Policy", "default-src 'self'")
+        next.ServeHTTP(w, r)
+    })
+}
+```
+
+### Data Encryption
+```go
+// Sensitive fields encrypted at rest
+// - User email (for privacy)
+// - Portfolio names
+// - Account names
+// - Any PII
+
+func EncryptField(plaintext string, key []byte) (string, error) {
+    // AES-256-GCM encryption
+}
+
+func DecryptField(ciphertext string, key []byte) (string, error) {
+    // AES-256-GCM decryption
+}
+```
+
+---
+
+## API Endpoints
+
+### Authentication
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/auth/register` | Create new account |
+| POST | `/auth/login` | Login, receive JWT |
+| POST | `/auth/logout` | Invalidate session |
+| POST | `/auth/mfa/enable` | Enable MFA |
+| POST | `/auth/mfa/verify` | Verify MFA code |
+
+### Portfolio
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/portfolios` | List user's portfolios |
+| POST | `/api/portfolios` | Create new portfolio |
+| GET | `/api/portfolios/:id` | Get portfolio details |
+| GET | `/api/portfolios/:id/allocation` | Get allocation breakdown |
+| GET | `/api/portfolios/:id/alerts` | Get active alerts |
+
+### Import
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/import/upload` | Upload CSV file |
+| GET | `/api/import/:id/preview` | Preview parsed holdings |
+| POST | `/api/import/:id/confirm` | Confirm and save import |
+| PUT | `/api/holdings/:id` | Edit holding classification |
+
+### Scenarios
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/scenarios` | List saved scenarios |
+| POST | `/api/scenarios` | Create new scenario |
+| POST | `/api/scenarios/simulate` | Run simulation (no save) |
+
+### Market Data
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/prices/:ticker` | Get current price |
+| GET | `/api/prices/batch` | Get multiple prices |
+| GET | `/api/news` | Get portfolio-relevant news |
+
+---
+
+## Testing Strategy
+
+### Test Categories
+```
+tests/
+├── unit/           # Function-level tests
+├── integration/    # API endpoint tests
+├── e2e/            # Full user flow tests
+└── fixtures/       # Test data
+```
+
+### Critical Test Cases
+1. **CSV Parsing:** Each brokerage format with edge cases
+2. **Allocation Calculation:** Decimal precision, rounding
+3. **Alert Detection:** All threshold scenarios
+4. **Authentication:** Login, logout, session expiry, MFA
+5. **Data Encryption:** Encrypt/decrypt cycle integrity
+
+### Test Data Requirements
+- Sample CSVs for each supported brokerage
+- Holdings with various asset classes
+- Edge cases: empty files, malformed data, special characters
+
+---
+
+## Development Workflow
+
+### Commands
+```bash
+# Run development server (hot reload)
+go run cmd/server/main.go
+
+# Run tests
+go test ./...
+
+# Run with coverage
+go test -cover ./...
+
+# Format code
+gofmt -s -w .
+
+# Lint
+go vet ./...
+
+# Build production binary
+go build -o truenorth cmd/server/main.go
+```
+
+### Environment Variables
+```bash
+# Required
+TRUENORTH_DATABASE_URL="sqlite:./truenorth.db"
+TRUENORTH_SECRET_KEY="32-byte-secret-key-here"
+TRUENORTH_ENCRYPTION_KEY="32-byte-encryption-key"
+
+# Optional
+TRUENORTH_PORT="8080"
+TRUENORTH_ENV="development"  # or "production"
+TRUENORTH_LOG_LEVEL="info"
+```
+
+---
+
+## MVP Feature Checklist
+
+### P0 - Must Have (MVP Launch)
+- [ ] User registration and login with MFA
+- [ ] CSV upload (Schwab, Fidelity, Vanguard)
+- [ ] Auto-tagging of tickers (asset class, sector, geography)
+- [ ] Manual editing of classifications
+- [ ] Dashboard with allocation charts
+- [ ] Top 10 holdings display
+- [ ] Free cash identification
+- [ ] Concentration alerts
+- [ ] Basic what-if scenarios
+
+### P1 - Should Have (Post-MVP)
+- [ ] 5-year historical performance
+- [ ] Full R2R matrix visualization
+- [ ] Investment expense tracking
+- [ ] Real-time price updates
+- [ ] News feed integration
+
+### P2 - Nice to Have (Future)
+- [ ] API sync (Plaid/Yodlee)
+- [ ] Efficient Frontier analysis
+- [ ] PDF statement OCR
+- [ ] Family office tier features
 
 ---
 
@@ -87,271 +604,55 @@ type PageData struct {
 ### Naming Conventions
 | Type | Convention | Example |
 |------|------------|---------|
-| Functions | camelCase, verb-first | `fetchStories`, `renderHTML` |
-| Types/Structs | PascalCase, noun | `Story`, `PageData` |
-| Constants | PascalCase | `MaxStories`, `APIBaseURL` |
-| Variables | camelCase, descriptive | `storyList`, `httpClient` |
-| Files | lowercase, descriptive | `main.go`, `api_client.go` |
-
-### Function Design
-```go
-// Good: Single responsibility, clear name, handles errors
-func fetchStory(id int) (*Story, error) {
-    // Implementation
-}
-
-// Bad: Does too much, unclear name
-func getData() {
-    // Fetches, processes, and saves - too many responsibilities
-}
-```
+| Functions | camelCase, verb-first | `calculateAllocation`, `parseCSV` |
+| Types | PascalCase, noun | `Holding`, `Portfolio` |
+| Interfaces | PascalCase, -er suffix | `CSVParser`, `TickerTagger` |
+| Constants | PascalCase | `MaxConcentration`, `DefaultTimeout` |
+| Files | snake_case | `csv_parser.go`, `risk_reward.go` |
 
 ### Error Handling
 ```go
 // Always wrap errors with context
 if err != nil {
-    return fmt.Errorf("failed to fetch story %d: %w", id, err)
+    return fmt.Errorf("failed to parse CSV row %d: %w", rowNum, err)
 }
 
-// Log errors at the appropriate level
-log.Printf("Warning: skipping story %d due to error: %v", id, err)
+// Use custom error types for business logic
+type ValidationError struct {
+    Field   string
+    Message string
+}
 ```
 
-### Comments
-- **Do** comment on WHY, not WHAT
-- **Do** document public functions and types
-- **Don't** add obvious comments that repeat the code
-
+### Financial Calculations
 ```go
-// Good: Explains business logic
-// Score threshold filters out low-engagement stories to maintain quality
-if story.Score < MinScoreThreshold {
-    continue
-}
+// ALWAYS use decimal for money - NEVER float64
+import "github.com/shopspring/decimal"
 
-// Bad: States the obvious
-// Increment i by 1
-i++
+// Good
+value := decimal.NewFromFloat(1234.56)
+total := value.Mul(quantity)
+
+// Bad - DO NOT USE
+value := 1234.56  // Float precision issues!
 ```
 
 ---
 
-## Refactoring Guidelines
+## Success Metrics
 
-### Phase 1: Code Organization
-Split `main.go` into logical modules:
+### North Star Metric
+**Monthly Active Users (MAU) with refreshed portfolio data**
 
-```
-hackernews/
-├── cmd/
-│   └── generator/
-│       └── main.go          # Entry point only
-├── internal/
-│   ├── api/
-│   │   └── hackernews.go    # API client
-│   ├── models/
-│   │   └── story.go         # Data structures
-│   ├── renderer/
-│   │   └── html.go          # Template rendering
-│   └── storage/
-│       └── filesystem.go    # File operations
-├── templates/
-├── static/
-└── public/
-```
-
-### Phase 2: Configuration
-Extract hardcoded values into configuration:
-
-```go
-type Config struct {
-    APIBaseURL    string        // HackerNews API endpoint
-    MaxStories    int           // Number of stories to fetch
-    OutputDir     string        // Where to write generated files
-    TemplateDir   string        // Template location
-    RequestTimeout time.Duration // HTTP timeout
-}
-```
-
-### Phase 3: Testability
-Design for testing:
-
-```go
-// Use interfaces for external dependencies
-type StoryFetcher interface {
-    FetchTopStories(limit int) ([]Story, error)
-    FetchStory(id int) (*Story, error)
-}
-
-// Inject dependencies
-type Generator struct {
-    fetcher  StoryFetcher
-    renderer Renderer
-    writer   FileWriter
-}
-```
+### KPIs
+| Metric | Target (6mo) |
+|--------|--------------|
+| Time-to-First-Value | < 5 minutes |
+| Onboarding Completion | > 70% |
+| 30-Day Retention | > 50% |
+| NPS Score | > 40 |
 
 ---
 
-## API Integration
-
-### HackerNews API
-- **Base URL:** `https://hacker-news.firebaseio.com/v0/`
-- **Endpoints:**
-  - `GET /topstories.json` - List of top story IDs
-  - `GET /item/{id}.json` - Individual story details
-- **Rate Limiting:** Be respectful, add delays between requests if fetching many items
-- **Error Handling:** API may return null for deleted/dead stories
-
-### Fintech Extension Points
-For financial news integration, consider these data sources:
-- SEC EDGAR API for filings
-- Alpha Vantage for market data
-- NewsAPI for financial news
-- RSS feeds from financial publications
-
----
-
-## Security Considerations
-
-### Input Sanitization
-All external data (API responses) must be sanitized before rendering:
-
-```go
-// Use html/template for automatic escaping
-// Never use text/template for user-facing content
-import "html/template"
-
-// Explicitly escape when building HTML strings
-title := template.HTMLEscapeString(story.Title)
-```
-
-### Sensitive Data
-- Never commit API keys or secrets
-- Use environment variables for configuration
-- Keep `public/` directory out of version control if it contains any dynamic content
-
----
-
-## Performance Guidelines
-
-### HTTP Client Best Practices
-```go
-// Reuse HTTP client - don't create new ones per request
-var httpClient = &http.Client{
-    Timeout: 10 * time.Second,
-}
-
-// Consider connection pooling for high-volume fetching
-transport := &http.Transport{
-    MaxIdleConns:        100,
-    MaxIdleConnsPerHost: 100,
-}
-```
-
-### Concurrent Fetching
-For fetching multiple stories, use goroutines with proper synchronization:
-
-```go
-// Use worker pool pattern for controlled concurrency
-// Limit concurrent requests to avoid overwhelming the API
-const maxConcurrent = 5
-```
-
----
-
-## Testing Strategy
-
-### Unit Tests
-- Test each function in isolation
-- Mock external dependencies (HTTP client, filesystem)
-- Cover edge cases: empty responses, malformed data, network errors
-
-### Integration Tests
-- Test API integration with real endpoints (sparingly)
-- Verify generated HTML is valid
-- Check file system operations
-
-### Test File Naming
-```
-api/
-├── hackernews.go
-└── hackernews_test.go
-```
-
----
-
-## Development Workflow
-
-### Running the Generator
-```bash
-go run main.go
-# or after refactoring:
-go run cmd/generator/main.go
-```
-
-### Building
-```bash
-go build -o hackernews main.go
-./hackernews
-```
-
-### Testing
-```bash
-go test ./...
-go test -v -cover ./...
-```
-
-### Linting
-```bash
-go vet ./...
-gofmt -s -w .
-```
-
----
-
-## Future Considerations
-
-### Potential Enhancements
-1. **Caching Layer** - Store fetched stories to reduce API calls
-2. **Incremental Generation** - Only update changed content
-3. **Multiple Output Formats** - JSON feed, RSS, Markdown
-4. **Scheduling** - Automated regeneration via cron or systemd timer
-5. **Theming** - Dark mode, custom color schemes
-6. **Search** - Client-side or static search index
-
-### Fintech-Specific Features
-1. **Ticker Detection** - Highlight stock symbols in titles
-2. **Sentiment Analysis** - Tag stories as bullish/bearish
-3. **Watchlist Integration** - Filter stories by relevant tickers
-4. **Market Hours Indicator** - Show if markets are open
-5. **Price Widgets** - Display current prices for mentioned securities
-
----
-
-## Quick Reference
-
-### Common Tasks
-
-| Task | Command |
-|------|---------|
-| Generate site | `go run main.go` |
-| Run tests | `go test ./...` |
-| Format code | `gofmt -s -w .` |
-| Check errors | `go vet ./...` |
-| Build binary | `go build -o hackernews` |
-
-### Important Files
-- `main.go` - All application logic
-- `templates/index.html` - Page template
-- `static/style.css` - Styles
-- `public/` - Generated output
-
-### External Resources
-- [HackerNews API Docs](https://github.com/HackerNews/API)
-- [Go html/template](https://pkg.go.dev/html/template)
-- [Effective Go](https://go.dev/doc/effective_go)
-
----
-
-*This document should be updated as the architecture evolves. When in doubt, favor simplicity and clarity over complexity.*
+*Document Version: 1.0 | Last Updated: December 2025*
+*When in doubt, favor security and simplicity over features.*
