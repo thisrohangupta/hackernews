@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 
 	"github.com/findosh/truenorth/internal/config"
+	"github.com/findosh/truenorth/internal/services/ai"
 	"github.com/findosh/truenorth/internal/services/analytics"
 	"github.com/findosh/truenorth/internal/services/auth"
 	"github.com/findosh/truenorth/internal/services/marketdata"
@@ -22,6 +23,7 @@ type Handler struct {
 	authService      *auth.Service
 	analyticsService *analytics.Service
 	marketDataSvc    *marketdata.Service
+	aiService        *ai.Service
 	userRepo         *storage.UserRepository
 	portfolioRepo    *storage.PortfolioRepository
 	holdingRepo      *storage.HoldingRepository
@@ -35,6 +37,7 @@ func New(
 	authService *auth.Service,
 	analyticsService *analytics.Service,
 	marketDataSvc *marketdata.Service,
+	aiService *ai.Service,
 	userRepo *storage.UserRepository,
 	portfolioRepo *storage.PortfolioRepository,
 	holdingRepo *storage.HoldingRepository,
@@ -57,6 +60,7 @@ func New(
 		authService:      authService,
 		analyticsService: analyticsService,
 		marketDataSvc:    marketDataSvc,
+		aiService:        aiService,
 		userRepo:         userRepo,
 		portfolioRepo:    portfolioRepo,
 		holdingRepo:      holdingRepo,

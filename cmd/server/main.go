@@ -11,6 +11,7 @@ import (
 	"github.com/findosh/truenorth/internal/config"
 	"github.com/findosh/truenorth/internal/handlers"
 	"github.com/findosh/truenorth/internal/middleware"
+	"github.com/findosh/truenorth/internal/services/ai"
 	"github.com/findosh/truenorth/internal/services/analytics"
 	"github.com/findosh/truenorth/internal/services/auth"
 	"github.com/findosh/truenorth/internal/services/marketdata"
@@ -48,6 +49,11 @@ func main() {
 		CacheTTL: 0,                        // Use default cache TTL
 	})
 
+	// Initialize AI service
+	aiConfig := ai.DefaultConfig()
+	aiConfig.APIKey = os.Getenv("ANTHROPIC_API_KEY")
+	aiService := ai.NewService(aiConfig)
+
 	// Get template directory
 	templateDir := getTemplateDir()
 
@@ -58,6 +64,7 @@ func main() {
 		authService,
 		analyticsService,
 		marketDataService,
+		aiService,
 		userRepo,
 		portfolioRepo,
 		holdingRepo,
@@ -137,6 +144,14 @@ func main() {
 	mux.Handle("/api/market/status", http.HandlerFunc(h.APIMarketStatus))
 	mux.Handle("/api/market/quote", authMiddleware.RequireAuth(http.HandlerFunc(h.APIQuote)))
 	mux.Handle("/api/portfolio/refresh", authMiddleware.RequireAuth(http.HandlerFunc(h.APIRefreshPrices)))
+
+	// API routes - AI (P2 features)
+	mux.Handle("/api/ai/ask", authMiddleware.RequireAuth(http.HandlerFunc(h.AIAsk)))
+	mux.Handle("/api/ai/tax-analysis", authMiddleware.RequireAuth(http.HandlerFunc(h.AITaxAnalysis)))
+	mux.Handle("/api/ai/usage", authMiddleware.RequireAuth(http.HandlerFunc(h.AIUsage)))
+	mux.Handle("/api/ai/history", authMiddleware.RequireAuth(http.HandlerFunc(h.AIHistory)))
+	mux.Handle("/api/ai/cache/stats", authMiddleware.RequireAuth(http.HandlerFunc(h.AICacheStats)))
+	mux.Handle("/api/ai/cache/invalidate", authMiddleware.RequireAuth(http.HandlerFunc(h.AIInvalidateCache)))
 
 	// Apply global middleware
 	handler := middleware.Chain(
